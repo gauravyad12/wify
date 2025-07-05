@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Save, User, Brain, Globe, Mic, Camera, Music, Smartphone, Monitor } from 'lucide-react';
+import { Save, User, Brain, Globe, Mic, Camera, Music, Smartphone } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 
 export default function Settings() {
@@ -199,6 +199,12 @@ export default function Settings() {
                   </label>
                 </div>
 
+                <div className="bg-blue-600/20 p-3 rounded-lg">
+                  <p className="text-blue-300 text-sm">
+                    👏 Clap twice quickly to activate voice mode. Works best in quiet environments.
+                  </p>
+                </div>
+
                 <div>
                   <label className="block text-white/80 text-sm font-medium mb-2">Voice Volume</label>
                   <input
@@ -350,6 +356,15 @@ export default function Settings() {
                     <p>• "WhatsApp video call Sarah" - Video call</p>
                     <p>• "Open Instagram" - Opens social apps</p>
                     <p>• "Open Chrome and search cats" - Browser automation</p>
+                  </div>
+                </div>
+
+                <div className="bg-yellow-600/20 p-4 rounded-lg">
+                  <h4 className="text-yellow-300 font-medium mb-2">Platform Support:</h4>
+                  <div className="text-yellow-200 text-sm space-y-1">
+                    <p>🖥️ Windows: Native app launching via protocols</p>
+                    <p>📱 Mobile: Deep linking to iOS/Android apps</p>
+                    <p>🌐 Browser: Cross-platform web app support</p>
                   </div>
                 </div>
               </div>

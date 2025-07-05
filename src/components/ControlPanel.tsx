@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Mic, MicOff, Volume2, VolumeX, Loader } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Loader, Zap } from 'lucide-react';
 import { useAI } from '../contexts/AIContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAudio } from '../contexts/AudioContext';
@@ -10,19 +10,16 @@ export default function ControlPanel() {
     isListening, 
     startListening, 
     stopListening, 
-    currentResponse,
     isProcessing 
   } = useAI();
   
   const { settings } = useSettings();
   const { isMuted, toggleMute } = useAudio();
-  const [isRecording, setIsRecording] = useState(false);
 
   return (
     <div className="h-full flex flex-col p-4 space-y-4">
-      {/* Status Display */}
+      {/* Wife Status */}
       <div className="flex-1 flex flex-col justify-center items-center space-y-4">
-        {/* Wife Status */}
         <div className="text-center">
           <h3 className="text-white font-semibold text-lg mb-2">{settings.wifeName}</h3>
           <div className="space-y-2">
@@ -47,23 +44,20 @@ export default function ControlPanel() {
             )}
             
             {!isListening && !isProcessing && (
-              <div className="text-white/60 text-sm">
-                {settings.clapDetection ? 'Clap to activate or use voice button' : 'Press voice button to talk'}
+              <div className="text-white/60 text-sm text-center">
+                <p>{settings.clapDetection ? '👏 Clap to activate' : 'Press voice button'}</p>
+                <p className="text-xs text-white/40 mt-1">Ready to help you</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Current Response Display */}
-        {currentResponse && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-blue-600/20 text-white p-4 rounded-lg max-w-full"
-          >
-            <p className="text-sm font-medium mb-1">{settings.wifeName} says:</p>
-            <p className="text-sm leading-relaxed">{currentResponse}</p>
-          </motion.div>
+        {/* Clap Detection Status */}
+        {settings.clapDetection && (
+          <div className="flex items-center space-x-2 text-green-400 text-xs">
+            <Zap size={12} />
+            <span>Clap detection active</span>
+          </div>
         )}
       </div>
 

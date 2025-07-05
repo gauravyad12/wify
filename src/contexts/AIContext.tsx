@@ -5,6 +5,7 @@ import Groq from 'groq-sdk';
 import { useSettings } from './SettingsContext';
 import { AppAutomation, parseAppCommand } from '../utils/appAutomation';
 import { BrowserAutomation, parseBrowserCommand } from '../utils/browserAutomation';
+import { ClapDetector } from '../utils/clapDetection';
 
 interface AIContextType {
   sendMessage: (message: string) => Promise<string>;
@@ -26,6 +27,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
   const [currentEmotion, setCurrentEmotion] = useState('default');
   const [isProcessing, setIsProcessing] = useState(false);
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
+  const [clapDetector] = useState(new ClapDetector());
 
   // Initialize speech recognition
   useEffect(() => {
@@ -53,57 +55,40 @@ export function AIProvider({ children }: { children: ReactNode }) {
         setIsListening(false);
       };
 
+      recognitionInstance.onend = () => {
+        setIsListening(false);
+      };
+
       setRecognition(recognitionInstance);
     }
   }, [settings.language]);
 
-  // Clap detection
+  // Initialize clap detection
   useEffect(() => {
-    if (!settings.clapDetection) return;
+    if (!settings.clapDetection) {
+      clapDetector.stop();
+      return;
+    }
 
-    let audioContext: AudioContext;
-    let analyser: AnalyserNode;
-    let microphone: MediaStreamAudioSourceNode;
-    let dataArray: Uint8Array;
-
-    const initClapDetection = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new AudioContext();
-        analyser = audioContext.createAnalyser();
-        microphone = audioContext.createMediaStreamSource(stream);
-        
-        microphone.connect(analyser);
-        analyser.fftSize = 256;
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-        const detectClap = () => {
-          analyser.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-          
-          if (average > 100) { // Clap threshold
-            if (!isListening) {
-              startListening();
-            }
-          }
-          
-          requestAnimationFrame(detectClap);
-        };
-        
-        detectClap();
-      } catch (error) {
-        console.error('Error initializing clap detection:', error);
+    const initializeClap = async () => {
+      const success = await clapDetector.initialize(() => {
+        if (!isListening && !isProcessing) {
+          startListening();
+        }
+      });
+      
+      if (success) {
+        clapDetector.setSensitivity(5); // Medium sensitivity
+        clapDetector.start();
       }
     };
 
-    initClapDetection();
+    initializeClap();
 
     return () => {
-      if (audioContext) {
-        audioContext.close();
-      }
+      clapDetector.destroy();
     };
-  }, [settings.clapDetection, isListening]);
+  }, [settings.clapDetection, isListening, isProcessing]);
 
   const getLanguageCode = (lang: string): string => {
     const langMap: { [key: string]: string } = {
@@ -145,6 +130,8 @@ export function AIProvider({ children }: { children: ReactNode }) {
   };
 
   const handleAutomationCommands = async (message: string): Promise<string | null> => {
+    if (!settings.enableAppAutomation) return null;
+
     // Check for app automation commands
     const appCommand = parseAppCommand(message);
     if (appCommand) {
