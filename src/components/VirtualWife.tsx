@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls, Environment } from '@react-three/drei';
 import * as THREE from 'three';
-import { VRM, VRMLoaderPlugin } from '@pixiv/three-vrm';
+import { VRM, VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 import { useAI } from '../contexts/AIContext';
@@ -32,61 +32,109 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
       modelPath,
       (gltf) => {
         const vrmModel = gltf.userData.vrm as VRM;
-        setVrm(vrmModel);
-        
-        if (meshRef.current) {
-          meshRef.current.add(vrmModel.scene);
+        if (vrmModel) {
+          // Rotate the model to face forward
+          VRMUtils.rotateVRM0(vrmModel);
+          
+          setVrm(vrmModel);
+          
+          if (meshRef.current) {
+            meshRef.current.add(vrmModel.scene);
+            // Position the model properly
+            vrmModel.scene.position.set(0, -1, 0);
+            vrmModel.scene.rotation.set(0, 0, 0);
+          }
+          
+          // Create animation mixer
+          const animMixer = new THREE.AnimationMixer(vrmModel.scene);
+          setMixer(animMixer);
+          setIsInitialized(true);
+          
+          console.log('VRM model loaded successfully');
         }
-        
-        // Create animation mixer
-        const animMixer = new THREE.AnimationMixer(vrmModel.scene);
-        setMixer(animMixer);
-        setIsInitialized(true);
       },
-      undefined,
-      (error) => console.error('Error loading VRM:', error)
+      (progress) => {
+        console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+      },
+      (error) => {
+        console.error('Error loading VRM:', error);
+        // Try to load a fallback or create a simple placeholder
+        createFallbackModel();
+      }
     );
   }, [modelPath]);
+
+  const createFallbackModel = () => {
+    // Create a simple fallback model if VRM fails to load
+    const geometry = new THREE.CapsuleGeometry(0.5, 1.5, 4, 8);
+    const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const fallbackMesh = new THREE.Mesh(geometry, material);
+    fallbackMesh.position.set(0, 0, 0);
+    
+    if (meshRef.current) {
+      meshRef.current.add(fallbackMesh);
+    }
+    
+    console.log('Using fallback model');
+  };
 
   // Load animations
   useEffect(() => {
     const animationFiles = [
-      'Administering Cpr.fbx',
-      'Angry.fbx',
-      'Female Laying Pose.fbx',
+      'Standing Greeting.fbx',
       'Happy.fbx',
-      'Hip Hop Dancing.fbx',
-      'Kiss.fbx',
-      'Laughing.fbx',
-      'Praying.fbx',
-      'Rumba Dancing.fbx',
       'Sad Idle.fbx',
-      'Standing Greeting.fbx'
+      'Angry.fbx',
+      'Laughing.fbx',
+      'Hip Hop Dancing.fbx',
+      'Rumba Dancing.fbx',
+      'Kiss.fbx',
+      'Praying.fbx',
+      'Female Laying Pose.fbx'
     ];
 
     const fbxLoader = new FBXLoader();
     const loadedAnimations: { [key: string]: THREE.AnimationClip } = {};
 
+    let loadedCount = 0;
+    const totalFiles = animationFiles.length;
+
     animationFiles.forEach((file) => {
       fbxLoader.load(
         `/animations/${file}`,
         (fbx) => {
-          if (fbx.animations.length > 0) {
+          if (fbx.animations && fbx.animations.length > 0) {
             const animName = file.replace('.fbx', '');
             loadedAnimations[animName] = fbx.animations[0];
+            console.log(`Loaded animation: ${animName}`);
+          }
+          
+          loadedCount++;
+          if (loadedCount === totalFiles) {
+            setAnimations(loadedAnimations);
+            console.log('All animations loaded:', Object.keys(loadedAnimations));
           }
         },
-        undefined,
-        (error) => console.warn(`Could not load animation ${file}:`, error)
+        (progress) => {
+          console.log(`Loading ${file}:`, (progress.loaded / progress.total * 100) + '%');
+        },
+        (error) => {
+          console.warn(`Could not load animation ${file}:`, error);
+          loadedCount++;
+          if (loadedCount === totalFiles) {
+            setAnimations(loadedAnimations);
+          }
+        }
       );
     });
-
-    setAnimations(loadedAnimations);
   }, []);
 
   // Handle animation changes
   useEffect(() => {
-    if (!mixer || !animations[currentAnimation]) return;
+    if (!mixer || !animations[currentAnimation]) {
+      console.log('Animation not available:', currentAnimation, 'Available:', Object.keys(animations));
+      return;
+    }
 
     // Stop current animation
     if (currentAction) {
@@ -97,12 +145,14 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
     const clip = animations[currentAnimation];
     const action = mixer.clipAction(clip);
     action.reset().fadeIn(0.5);
+    action.setLoop(THREE.LoopRepeat, Infinity);
     
     if (isPlaying) {
       action.play();
     }
     
     setCurrentAction(action);
+    console.log('Playing animation:', currentAnimation);
   }, [currentAnimation, animations, mixer, isPlaying]);
 
   // Start with greeting animation when initialized
@@ -111,22 +161,18 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
       const greetingClip = animations['Standing Greeting'];
       const greetingAction = mixer.clipAction(greetingClip);
       greetingAction.reset().play();
+      greetingAction.setLoop(THREE.LoopOnce, 1);
       setCurrentAction(greetingAction);
       
       // After greeting, switch to idle
-      const timeoutId = setTimeout(() => {
+      greetingAction.addEventListener('finished', () => {
         if (animations['Female Laying Pose']) {
-          greetingAction.fadeOut(1);
           const idleAction = mixer.clipAction(animations['Female Laying Pose']);
           idleAction.reset().fadeIn(1).play();
+          idleAction.setLoop(THREE.LoopRepeat, Infinity);
           setCurrentAction(idleAction);
         }
-      }, 3000);
-
-      // Cleanup function to clear timeout
-      return () => {
-        clearTimeout(timeoutId);
-      };
+      });
     }
   }, [isInitialized, mixer, animations, currentAction]);
 
@@ -168,7 +214,7 @@ export default function VirtualWife() {
   return (
     <div className="w-full h-full relative bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-indigo-900/20">
       <Canvas
-        camera={{ position: [0, 1, 3], fov: 50 }}
+        camera={{ position: [0, 1.5, 4], fov: 50 }}
         className="w-full h-full"
       >
         <ambientLight intensity={0.6} />
@@ -187,10 +233,11 @@ export default function VirtualWife() {
           enablePan={false}
           enableZoom={true}
           enableRotate={true}
-          minDistance={1}
-          maxDistance={10}
+          minDistance={2}
+          maxDistance={8}
           minPolarAngle={Math.PI / 6}
           maxPolarAngle={Math.PI - Math.PI / 6}
+          target={[0, 0, 0]}
         />
       </Canvas>
       

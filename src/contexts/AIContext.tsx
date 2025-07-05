@@ -168,7 +168,8 @@ export function AIProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = async (message: string): Promise<string> => {
     setIsProcessing(true);
-    setCurrentEmotion(detectEmotion(message));
+    const detectedEmotion = detectEmotion(message);
+    setCurrentEmotion(detectedEmotion);
 
     try {
       // Check for automation commands first
@@ -268,6 +269,10 @@ Always respond with love and care. Use terms of endearment like "darling", "swee
       return errorResponse;
     } finally {
       setIsProcessing(false);
+      // Reset emotion to default after processing
+      setTimeout(() => {
+        setCurrentEmotion('default');
+      }, 3000);
     }
   };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Mic, MicOff, Volume2, VolumeX, Loader, Zap } from 'lucide-react';
+import { Mic, MicOff, Volume2, VolumeX, Loader, Zap, Send, MessageCircle } from 'lucide-react';
 import { useAI } from '../contexts/AIContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAudio } from '../contexts/AudioContext';
@@ -10,11 +10,23 @@ export default function ControlPanel() {
     isListening, 
     startListening, 
     stopListening, 
-    isProcessing 
+    isProcessing,
+    sendMessage,
+    currentResponse
   } = useAI();
   
   const { settings } = useSettings();
   const { isMuted, toggleMute } = useAudio();
+  const [textInput, setTextInput] = useState('');
+  const [showChat, setShowChat] = useState(false);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (textInput.trim()) {
+      await sendMessage(textInput);
+      setTextInput('');
+    }
+  };
 
   return (
     <div className="h-full flex flex-col p-4 space-y-4">
@@ -59,7 +71,50 @@ export default function ControlPanel() {
             <span>Clap detection active</span>
           </div>
         )}
+
+        {/* Current Response Display */}
+        {currentResponse && (
+          <div className="bg-white/10 backdrop-blur-md rounded-lg p-3 max-h-32 overflow-y-auto">
+            <p className="text-white/90 text-sm">{currentResponse}</p>
+          </div>
+        )}
       </div>
+
+      {/* Chat Input Toggle */}
+      <button
+        onClick={() => setShowChat(!showChat)}
+        className="flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition-colors"
+      >
+        <MessageCircle size={16} />
+        <span className="text-sm">{showChat ? 'Hide Chat' : 'Show Chat'}</span>
+      </button>
+
+      {/* Chat Input */}
+      {showChat && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="space-y-2"
+        >
+          <form onSubmit={handleSendMessage} className="flex space-x-2">
+            <input
+              type="text"
+              value={textInput}
+              onChange={(e) => setTextInput(e.target.value)}
+              placeholder="Type your message..."
+              className="flex-1 bg-white/10 text-white placeholder-white/50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+            <button
+              type="submit"
+              disabled={!textInput.trim() || isProcessing}
+              className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white p-2 rounded-lg transition-colors"
+            >
+              <Send size={16} />
+            </button>
+          </form>
+        </motion.div>
+      )}
 
       {/* Voice Controls */}
       <div className="flex space-x-2">
