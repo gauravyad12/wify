@@ -1,7 +1,7 @@
 import React, { useRef, useCallback, useState } from 'react';
 import Webcam from 'react-webcam';
 import { motion } from 'framer-motion';
-import { Camera, CameraOff, Capture, RotateCcw } from 'lucide-react';
+import { Camera, CameraOff, Image, RotateCcw } from 'lucide-react';
 import { useCamera } from '../contexts/CameraContext';
 import { useAI } from '../contexts/AIContext';
 import { useSettings } from '../contexts/SettingsContext';
@@ -59,7 +59,7 @@ export default function CameraView() {
             disabled={!isCameraEnabled || isAnalyzing}
             className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white p-2 rounded-lg transition-colors"
           >
-            <Capture size={20} />
+            <Image size={20} />
           </button>
           <button
             onClick={toggleCamera}
