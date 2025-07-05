@@ -26,8 +26,8 @@ function App() {
   }, []);
 
   return (
-    <AIProvider>
-      <SettingsProvider>
+    <SettingsProvider>
+      <AIProvider>
         <AudioProvider>
           <CameraProvider>
             <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
@@ -118,8 +118,8 @@ function App() {
             </div>
           </CameraProvider>
         </AudioProvider>
-      </SettingsProvider>
-    </AIProvider>
+      </AIProvider>
+    </SettingsProvider>
   );
 }
 
