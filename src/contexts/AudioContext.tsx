@@ -28,6 +28,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const noteIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize Web Audio API for generating tones
   useEffect(() => {
@@ -38,6 +39,10 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     }
 
     return () => {
+      if (noteIntervalRef.current) {
+        clearInterval(noteIntervalRef.current);
+        noteIntervalRef.current = null;
+      }
       if (oscillatorRef.current) {
         oscillatorRef.current.stop();
         oscillatorRef.current = null;
@@ -52,6 +57,12 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     setCurrentTrack(track);
     
     try {
+      // Clear any existing interval
+      if (noteIntervalRef.current) {
+        clearInterval(noteIntervalRef.current);
+        noteIntervalRef.current = null;
+      }
+
       // Stop any currently playing audio
       if (oscillatorRef.current) {
         oscillatorRef.current.stop();
@@ -91,8 +102,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
           }
         };
         
-        // Change notes every 2 seconds
-        const noteInterval = setInterval(playNextNote, 2000);
+        // Change notes every 2 seconds and store the interval reference
+        noteIntervalRef.current = setInterval(playNextNote, 2000);
         
         // Set volume
         gainNode.gain.setValueAtTime((isMuted ? 0 : volume / 100) * 0.1, audioContext.currentTime);
@@ -103,7 +114,10 @@ export function AudioProvider({ children }: { children: ReactNode }) {
         
         // Handle oscillator end
         oscillator.onended = () => {
-          clearInterval(noteInterval);
+          if (noteIntervalRef.current) {
+            clearInterval(noteIntervalRef.current);
+            noteIntervalRef.current = null;
+          }
           setIsPlaying(false);
           oscillatorRef.current = null;
         };
@@ -139,6 +153,12 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   };
 
   const pauseTrack = () => {
+    // Clear the note interval
+    if (noteIntervalRef.current) {
+      clearInterval(noteIntervalRef.current);
+      noteIntervalRef.current = null;
+    }
+
     if (oscillatorRef.current) {
       oscillatorRef.current.stop();
       oscillatorRef.current = null;
