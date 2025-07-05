@@ -8,15 +8,17 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 import { useAI } from '../contexts/AIContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAudio } from '../contexts/AudioContext';
+import { ChevronDown } from 'lucide-react';
 
 interface VRMModelProps {
   modelPath: string;
   currentAnimation: string;
   isPlaying: boolean;
   isMusic: boolean;
+  manualAnimation?: string;
 }
 
-function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelProps) {
+function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnimation }: VRMModelProps) {
   const meshRef = useRef<THREE.Group>();
   const [vrm, setVrm] = useState<VRM | null>(null);
   const [animations, setAnimations] = useState<{ [key: string]: THREE.AnimationClip }>({});
@@ -29,31 +31,128 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
   // Dance animations for music
   const danceAnimations = ['Hip Hop Dancing', 'Rumba Dancing'];
 
-  // Create fallback animations if FBX files don't load
-  const createFallbackAnimations = () => {
-    const fallbackAnimations: { [key: string]: THREE.AnimationClip } = {};
+  // Create enhanced animations with proper bone movements
+  const createEnhancedAnimations = (vrmModel?: VRM) => {
+    const enhancedAnimations: { [key: string]: THREE.AnimationClip } = {};
     
-    // Create simple keyframe animations
-    const times = [0, 1, 2];
-    const values = [0, 1, 0]; // Simple up-down motion
+    // Get bone names from VRM model if available
+    const getBoneName = (boneName: string) => {
+      if (vrmModel?.humanoid) {
+        const bone = vrmModel.humanoid.getBoneNode(boneName as any);
+        return bone ? bone.name : boneName;
+      }
+      return boneName;
+    };
+
+    // Create more complex animations with multiple bones
+    const createDanceAnimation = (name: string, duration: number = 4) => {
+      const tracks: THREE.KeyframeTrack[] = [];
+      const times = [];
+      const numFrames = 60;
+      
+      for (let i = 0; i <= numFrames; i++) {
+        times.push((i / numFrames) * duration);
+      }
+
+      // Hip movement for dancing
+      const hipPositions: number[] = [];
+      const hipRotations: number[] = [];
+      
+      // Arm movements
+      const leftArmRotations: number[] = [];
+      const rightArmRotations: number[] = [];
+      
+      // Head movements
+      const headRotations: number[] = [];
+
+      for (let i = 0; i <= numFrames; i++) {
+        const t = (i / numFrames) * Math.PI * 2;
+        
+        // Hip sway
+        hipPositions.push(
+          Math.sin(t * 2) * 0.1, // x
+          Math.cos(t * 4) * 0.05, // y
+          0 // z
+        );
+        
+        hipRotations.push(
+          0, // x
+          Math.sin(t) * 0.2, // y
+          Math.cos(t * 2) * 0.1 // z
+        );
+
+        // Arm movements
+        leftArmRotations.push(
+          Math.sin(t + Math.PI/4) * 0.5, // x
+          Math.cos(t) * 0.3, // y
+          Math.sin(t * 2) * 0.2 // z
+        );
+        
+        rightArmRotations.push(
+          Math.sin(t - Math.PI/4) * 0.5, // x
+          Math.cos(t + Math.PI) * 0.3, // y
+          Math.sin(t * 2 + Math.PI) * 0.2 // z
+        );
+
+        // Head movement
+        headRotations.push(
+          Math.sin(t * 0.5) * 0.1, // x
+          Math.cos(t * 0.7) * 0.15, // y
+          0 // z
+        );
+      }
+
+      // Create tracks for different bones
+      tracks.push(
+        new THREE.VectorKeyframeTrack('.position', times, hipPositions),
+        new THREE.QuaternionKeyframeTrack('.quaternion', times, hipRotations),
+        new THREE.QuaternionKeyframeTrack('.bones[leftUpperArm].quaternion', times, leftArmRotations),
+        new THREE.QuaternionKeyframeTrack('.bones[rightUpperArm].quaternion', times, rightArmRotations),
+        new THREE.QuaternionKeyframeTrack('.bones[head].quaternion', times, headRotations)
+      );
+
+      return new THREE.AnimationClip(name, duration, tracks);
+    };
+
+    // Create different animation types
+    enhancedAnimations['Hip Hop Dancing'] = createDanceAnimation('Hip Hop Dancing', 3);
+    enhancedAnimations['Rumba Dancing'] = createDanceAnimation('Rumba Dancing', 4);
     
-    // Create tracks for different animations
-    const tracks = [
-      new THREE.NumberKeyframeTrack('.position[y]', times, values),
-      new THREE.NumberKeyframeTrack('.rotation[y]', times, [0, Math.PI * 0.5, 0])
+    // Greeting animation
+    const greetingTimes = [0, 1, 2, 3];
+    const greetingArmRotations = [
+      0, 0, 0,  // Start
+      0, 0, 1.5,  // Raise arm
+      0, 0, 1.5,  // Hold
+      0, 0, 0   // Lower
     ];
     
-    // Create clips for each animation type
-    const animationNames = [
-      'Standing Greeting', 'Happy', 'Sad Idle', 'Angry', 'Laughing',
-      'Hip Hop Dancing', 'Rumba Dancing', 'Kiss', 'Praying', 'Female Laying Pose'
-    ];
-    
-    animationNames.forEach(name => {
-      fallbackAnimations[name] = new THREE.AnimationClip(name, 2, tracks);
-    });
-    
-    return fallbackAnimations;
+    enhancedAnimations['Standing Greeting'] = new THREE.AnimationClip('Standing Greeting', 3, [
+      new THREE.QuaternionKeyframeTrack('.bones[rightUpperArm].quaternion', greetingTimes, greetingArmRotations)
+    ]);
+
+    // Happy animation - bouncing
+    const happyTimes = [0, 0.5, 1];
+    const happyPositions = [0, 0, 0, 0, 0.2, 0, 0, 0, 0];
+    enhancedAnimations['Happy'] = new THREE.AnimationClip('Happy', 1, [
+      new THREE.VectorKeyframeTrack('.position', happyTimes, happyPositions)
+    ]);
+
+    // Idle animation
+    const idleTimes = [0, 2, 4];
+    const idleRotations = [0, 0, 0, 0, 0.1, 0, 0, 0, 0];
+    enhancedAnimations['Female Laying Pose'] = new THREE.AnimationClip('Female Laying Pose', 4, [
+      new THREE.QuaternionKeyframeTrack('.quaternion', idleTimes, idleRotations)
+    ]);
+
+    // Add other emotion animations
+    enhancedAnimations['Sad Idle'] = enhancedAnimations['Female Laying Pose'];
+    enhancedAnimations['Angry'] = enhancedAnimations['Happy'];
+    enhancedAnimations['Laughing'] = enhancedAnimations['Happy'];
+    enhancedAnimations['Kiss'] = enhancedAnimations['Standing Greeting'];
+    enhancedAnimations['Praying'] = enhancedAnimations['Standing Greeting'];
+
+    return enhancedAnimations;
   };
 
   // Load VRM model
@@ -82,6 +181,9 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
           // Create animation mixer
           const animMixer = new THREE.AnimationMixer(vrmModel.scene);
           setMixer(animMixer);
+          
+          // Load enhanced animations
+          setAnimations(createEnhancedAnimations(vrmModel));
           setIsInitialized(true);
           
           console.log('VRM model loaded successfully');
@@ -115,12 +217,15 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
     // Create mixer for fallback model
     const animMixer = new THREE.AnimationMixer(fallbackMesh);
     setMixer(animMixer);
+    
+    // Load enhanced animations for fallback
+    setAnimations(createEnhancedAnimations());
     setIsInitialized(true);
     
-    console.log('Using fallback model with animations');
+    console.log('Using fallback model with enhanced animations');
   };
 
-  // Load animations with fallback
+  // Load FBX animations with fallback to enhanced animations
   useEffect(() => {
     const animationFiles = [
       'Standing Greeting.fbx',
@@ -140,16 +245,14 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
 
     let loadedCount = 0;
     const totalFiles = animationFiles.length;
-    let hasErrors = false;
 
     const checkComplete = () => {
       if (loadedCount === totalFiles) {
-        if (Object.keys(loadedAnimations).length === 0 || hasErrors) {
-          console.log('Using fallback animations');
-          setAnimations(createFallbackAnimations());
+        if (Object.keys(loadedAnimations).length > 0) {
+          setAnimations(prev => ({ ...prev, ...loadedAnimations }));
+          console.log('Loaded FBX animations:', Object.keys(loadedAnimations));
         } else {
-          setAnimations(loadedAnimations);
-          console.log('Loaded animations:', Object.keys(loadedAnimations));
+          console.log('Using enhanced procedural animations');
         }
       }
     };
@@ -161,7 +264,7 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
           if (fbx.animations && fbx.animations.length > 0) {
             const animName = file.replace('.fbx', '');
             loadedAnimations[animName] = fbx.animations[0];
-            console.log(`Loaded animation: ${animName}`);
+            console.log(`Loaded FBX animation: ${animName}`);
           }
           
           loadedCount++;
@@ -172,7 +275,6 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
         },
         (error) => {
           console.warn(`Could not load animation ${file}:`, error);
-          hasErrors = true;
           loadedCount++;
           checkComplete();
         }
@@ -182,16 +284,18 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
     // Timeout fallback
     setTimeout(() => {
       if (loadedCount < totalFiles) {
-        console.log('Animation loading timeout, using fallback');
-        setAnimations(createFallbackAnimations());
+        console.log('Animation loading timeout, using enhanced animations');
+        checkComplete();
       }
-    }, 10000);
+    }, 5000);
   }, []);
 
   // Handle animation changes
   useEffect(() => {
-    if (!mixer || !animations[currentAnimation]) {
-      console.log('Animation not available:', currentAnimation, 'Available:', Object.keys(animations));
+    const animationToPlay = manualAnimation || currentAnimation;
+    
+    if (!mixer || !animations[animationToPlay]) {
+      console.log('Animation not available:', animationToPlay, 'Available:', Object.keys(animations));
       return;
     }
 
@@ -201,32 +305,29 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
     }
 
     // Start new animation
-    const clip = animations[currentAnimation];
+    const clip = animations[animationToPlay];
     const action = mixer.clipAction(clip);
     action.reset().fadeIn(0.5);
     
     // Set loop mode based on animation type
-    if (isMusic && danceAnimations.includes(currentAnimation)) {
+    if (isMusic && danceAnimations.includes(animationToPlay)) {
       action.setLoop(THREE.LoopRepeat, Infinity);
       action.timeScale = 1.2; // Slightly faster for dancing
-    } else if (currentAnimation === 'Standing Greeting') {
+    } else if (animationToPlay === 'Standing Greeting') {
       action.setLoop(THREE.LoopOnce, 1);
       action.clampWhenFinished = true;
     } else {
       action.setLoop(THREE.LoopRepeat, Infinity);
     }
     
-    if (isPlaying) {
-      action.play();
-    }
-    
+    action.play();
     setCurrentAction(action);
-    console.log('Playing animation:', currentAnimation, 'isMusic:', isMusic);
-  }, [currentAnimation, animations, mixer, isPlaying, isMusic]);
+    console.log('Playing animation:', animationToPlay, 'isMusic:', isMusic);
+  }, [manualAnimation, currentAnimation, animations, mixer, isMusic]);
 
-  // Auto-switch dance animations when music is playing
+  // Auto-switch dance animations when music is playing (only if no manual animation)
   useEffect(() => {
-    if (!isMusic || !mixer || danceAnimations.length === 0) return;
+    if (!isMusic || !mixer || danceAnimations.length === 0 || manualAnimation) return;
 
     const switchDance = () => {
       const nextIndex = (danceIndex + 1) % danceAnimations.length;
@@ -252,11 +353,11 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
     const interval = setInterval(switchDance, 15000);
     
     return () => clearInterval(interval);
-  }, [isMusic, mixer, animations, danceIndex, currentAction]);
+  }, [isMusic, mixer, animations, danceIndex, currentAction, manualAnimation]);
 
   // Start with greeting animation when initialized
   useEffect(() => {
-    if (isInitialized && mixer && animations['Standing Greeting'] && !hasGreeted) {
+    if (isInitialized && mixer && animations['Standing Greeting'] && !hasGreeted && !manualAnimation) {
       const greetingClip = animations['Standing Greeting'];
       const greetingAction = mixer.clipAction(greetingClip);
       greetingAction.reset().play();
@@ -267,7 +368,7 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
       
       // Switch to idle after greeting
       setTimeout(() => {
-        if (animations['Female Laying Pose'] && !isMusic) {
+        if (animations['Female Laying Pose'] && !isMusic && !manualAnimation) {
           const idleAction = mixer.clipAction(animations['Female Laying Pose']);
           idleAction.reset().fadeIn(1).play();
           idleAction.setLoop(THREE.LoopRepeat, Infinity);
@@ -275,7 +376,7 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
         }
       }, 3000);
     }
-  }, [isInitialized, mixer, animations, hasGreeted, isMusic]);
+  }, [isInitialized, mixer, animations, hasGreeted, isMusic, manualAnimation]);
 
   // Animation loop
   useFrame((state, delta) => {
@@ -288,8 +389,9 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelP
     }
     
     // Add subtle floating animation when dancing
-    if (isMusic && meshRef.current) {
+    if (isMusic && meshRef.current && !manualAnimation) {
       meshRef.current.position.y = Math.sin(state.clock.elapsedTime * 2) * 0.1 - 1;
+      meshRef.current.rotation.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.1;
     }
   });
 
@@ -300,8 +402,28 @@ export default function VirtualWife() {
   const { currentEmotion, isListening } = useAI();
   const { settings } = useSettings();
   const { isPlaying, currentTrack } = useAudio();
+  const [showAnimationDropdown, setShowAnimationDropdown] = useState(false);
+  const [manualAnimation, setManualAnimation] = useState<string>('');
+  
+  const availableAnimations = [
+    'Standing Greeting',
+    'Happy',
+    'Sad Idle',
+    'Angry',
+    'Laughing',
+    'Hip Hop Dancing',
+    'Rumba Dancing',
+    'Kiss',
+    'Praying',
+    'Female Laying Pose'
+  ];
   
   const getAnimationForEmotion = (emotion: string, musicPlaying: boolean) => {
+    // If manual animation is selected, use it
+    if (manualAnimation) {
+      return manualAnimation;
+    }
+    
     // If music is playing, prioritize dance animations
     if (musicPlaying && settings.autoDance) {
       return 'Hip Hop Dancing'; // Will auto-switch between dance animations
@@ -322,6 +444,15 @@ export default function VirtualWife() {
     return emotionMap[emotion] || emotionMap.default;
   };
 
+  const handleAnimationSelect = (animation: string) => {
+    setManualAnimation(animation);
+    setShowAnimationDropdown(false);
+  };
+
+  const clearManualAnimation = () => {
+    setManualAnimation('');
+  };
+
   return (
     <div className="w-full h-full relative bg-gradient-to-br from-purple-900/20 via-blue-900/20 to-indigo-900/20">
       <Canvas
@@ -338,6 +469,7 @@ export default function VirtualWife() {
           currentAnimation={getAnimationForEmotion(currentEmotion, isPlaying)}
           isPlaying={true}
           isMusic={isPlaying}
+          manualAnimation={manualAnimation}
         />
         
         <Environment preset="sunset" />
@@ -391,11 +523,52 @@ export default function VirtualWife() {
         </div>
       </div>
 
-      {/* Animation Status */}
-      <div className="absolute bottom-4 right-4">
-        <div className="bg-black/50 backdrop-blur-md text-white px-3 py-1 rounded-lg text-xs">
-          <p>Animation: {getAnimationForEmotion(currentEmotion, isPlaying)}</p>
-          {isPlaying && <p className="text-green-400">🎵 Music Mode Active</p>}
+      {/* Animation Control Panel */}
+      <div className="absolute bottom-4 right-4 space-y-2">
+        <div className="bg-black/50 backdrop-blur-md text-white px-3 py-2 rounded-lg text-xs">
+          <div className="flex items-center justify-between space-x-3">
+            <span>Animation: {manualAnimation || getAnimationForEmotion(currentEmotion, isPlaying)}</span>
+            <div className="relative">
+              <button
+                onClick={() => setShowAnimationDropdown(!showAnimationDropdown)}
+                className="flex items-center space-x-1 bg-purple-600 hover:bg-purple-700 px-2 py-1 rounded text-xs transition-colors"
+              >
+                <span>Select</span>
+                <ChevronDown size={12} />
+              </button>
+              
+              {showAnimationDropdown && (
+                <div className="absolute bottom-full right-0 mb-2 bg-black/90 backdrop-blur-md rounded-lg border border-white/20 min-w-48 max-h-64 overflow-y-auto">
+                  <div className="p-2">
+                    <button
+                      onClick={clearManualAnimation}
+                      className="w-full text-left px-2 py-1 text-xs text-yellow-400 hover:bg-white/10 rounded"
+                    >
+                      🔄 Auto (Follow emotions/music)
+                    </button>
+                    <div className="border-t border-white/20 my-1"></div>
+                    {availableAnimations.map((animation) => (
+                      <button
+                        key={animation}
+                        onClick={() => handleAnimationSelect(animation)}
+                        className={`w-full text-left px-2 py-1 text-xs hover:bg-white/10 rounded transition-colors ${
+                          (manualAnimation || getAnimationForEmotion(currentEmotion, isPlaying)) === animation 
+                            ? 'text-purple-400 bg-white/10' 
+                            : 'text-white'
+                        }`}
+                      >
+                        {animation}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          {isPlaying && <p className="text-green-400 mt-1">🎵 Music Mode Active</p>}
+          {manualAnimation && (
+            <p className="text-yellow-400 mt-1">🎭 Manual Animation Override</p>
+          )}
         </div>
       </div>
     </div>
