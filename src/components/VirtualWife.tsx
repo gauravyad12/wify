@@ -27,24 +27,16 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
   const [isInitialized, setIsInitialized] = useState(false);
   const [danceIndex, setDanceIndex] = useState(0);
   const [hasGreeted, setHasGreeted] = useState(false);
+  const [hasSkeleton, setHasSkeleton] = useState(false);
 
   // Dance animations for music
   const danceAnimations = ['Hip Hop Dancing', 'Rumba Dancing'];
 
   // Create enhanced animations with proper bone movements
-  const createEnhancedAnimations = (vrmModel?: VRM) => {
+  const createEnhancedAnimations = (vrmModel?: VRM, hasSkeletonStructure: boolean = false) => {
     const enhancedAnimations: { [key: string]: THREE.AnimationClip } = {};
     
-    // Get bone names from VRM model if available
-    const getBoneName = (boneName: string) => {
-      if (vrmModel?.humanoid) {
-        const bone = vrmModel.humanoid.getBoneNode(boneName as any);
-        return bone ? bone.name : boneName;
-      }
-      return boneName;
-    };
-
-    // Create more complex animations with multiple bones
+    // Create different animation types based on whether we have a skeleton
     const createDanceAnimation = (name: string, duration: number = 4) => {
       const tracks: THREE.KeyframeTrack[] = [];
       const times = [];
@@ -54,62 +46,84 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
         times.push((i / numFrames) * duration);
       }
 
-      // Hip movement for dancing
-      const hipPositions: number[] = [];
-      const hipRotations: number[] = [];
-      
-      // Arm movements
-      const leftArmRotations: number[] = [];
-      const rightArmRotations: number[] = [];
-      
-      // Head movements
-      const headRotations: number[] = [];
+      // Root object movements (always safe to apply)
+      const rootPositions: number[] = [];
+      const rootRotations: number[] = [];
 
       for (let i = 0; i <= numFrames; i++) {
         const t = (i / numFrames) * Math.PI * 2;
         
-        // Hip sway
-        hipPositions.push(
+        // Root position sway
+        rootPositions.push(
           Math.sin(t * 2) * 0.1, // x
           Math.cos(t * 4) * 0.05, // y
           0 // z
         );
         
-        hipRotations.push(
-          0, // x
-          Math.sin(t) * 0.2, // y
-          Math.cos(t * 2) * 0.1 // z
-        );
-
-        // Arm movements
-        leftArmRotations.push(
-          Math.sin(t + Math.PI/4) * 0.5, // x
-          Math.cos(t) * 0.3, // y
-          Math.sin(t * 2) * 0.2 // z
-        );
-        
-        rightArmRotations.push(
-          Math.sin(t - Math.PI/4) * 0.5, // x
-          Math.cos(t + Math.PI) * 0.3, // y
-          Math.sin(t * 2 + Math.PI) * 0.2 // z
-        );
-
-        // Head movement
-        headRotations.push(
-          Math.sin(t * 0.5) * 0.1, // x
-          Math.cos(t * 0.7) * 0.15, // y
-          0 // z
-        );
+        // Root rotation
+        const quat = new THREE.Quaternion();
+        quat.setFromEuler(new THREE.Euler(0, Math.sin(t) * 0.2, Math.cos(t * 2) * 0.1));
+        rootRotations.push(quat.x, quat.y, quat.z, quat.w);
       }
 
-      // Create tracks for different bones
+      // Always add root transformations
       tracks.push(
-        new THREE.VectorKeyframeTrack('.position', times, hipPositions),
-        new THREE.QuaternionKeyframeTrack('.quaternion', times, hipRotations),
-        new THREE.QuaternionKeyframeTrack('.bones[leftUpperArm].quaternion', times, leftArmRotations),
-        new THREE.QuaternionKeyframeTrack('.bones[rightUpperArm].quaternion', times, rightArmRotations),
-        new THREE.QuaternionKeyframeTrack('.bones[head].quaternion', times, headRotations)
+        new THREE.VectorKeyframeTrack('.position', times, rootPositions),
+        new THREE.QuaternionKeyframeTrack('.quaternion', times, rootRotations)
       );
+
+      // Only add bone-specific tracks if we have a skeleton
+      if (hasSkeletonStructure && vrmModel?.humanoid) {
+        // Try to get bone references safely
+        const leftArmBone = vrmModel.humanoid.getBoneNode('leftUpperArm' as any);
+        const rightArmBone = vrmModel.humanoid.getBoneNode('rightUpperArm' as any);
+        const headBone = vrmModel.humanoid.getBoneNode('head' as any);
+
+        if (leftArmBone) {
+          const leftArmRotations: number[] = [];
+          for (let i = 0; i <= numFrames; i++) {
+            const t = (i / numFrames) * Math.PI * 2;
+            const quat = new THREE.Quaternion();
+            quat.setFromEuler(new THREE.Euler(
+              Math.sin(t + Math.PI/4) * 0.5,
+              Math.cos(t) * 0.3,
+              Math.sin(t * 2) * 0.2
+            ));
+            leftArmRotations.push(quat.x, quat.y, quat.z, quat.w);
+          }
+          tracks.push(new THREE.QuaternionKeyframeTrack(`${leftArmBone.name}.quaternion`, times, leftArmRotations));
+        }
+
+        if (rightArmBone) {
+          const rightArmRotations: number[] = [];
+          for (let i = 0; i <= numFrames; i++) {
+            const t = (i / numFrames) * Math.PI * 2;
+            const quat = new THREE.Quaternion();
+            quat.setFromEuler(new THREE.Euler(
+              Math.sin(t - Math.PI/4) * 0.5,
+              Math.cos(t + Math.PI) * 0.3,
+              Math.sin(t * 2 + Math.PI) * 0.2
+            ));
+            rightArmRotations.push(quat.x, quat.y, quat.z, quat.w);
+          }
+          tracks.push(new THREE.QuaternionKeyframeTrack(`${rightArmBone.name}.quaternion`, times, rightArmRotations));
+        }
+
+        if (headBone) {
+          const headRotations: number[] = [];
+          for (let i = 0; i <= numFrames; i++) {
+            const t = (i / numFrames) * Math.PI * 2;
+            const quat = new THREE.Quaternion();
+            quat.setFromEuler(new THREE.Euler(
+              Math.sin(t * 0.5) * 0.1,
+              Math.cos(t * 0.7) * 0.15,
+              0
+            ));
+            headRotations.push(quat.x, quat.y, quat.z, quat.w);
+          }
+          tracks.push(new THREE.QuaternionKeyframeTrack(`${headBone.name}.quaternion`, times, headRotations));
+        }
+      }
 
       return new THREE.AnimationClip(name, duration, tracks);
     };
@@ -118,34 +132,58 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
     enhancedAnimations['Hip Hop Dancing'] = createDanceAnimation('Hip Hop Dancing', 3);
     enhancedAnimations['Rumba Dancing'] = createDanceAnimation('Rumba Dancing', 4);
     
-    // Greeting animation
+    // Greeting animation - safe for all models
     const greetingTimes = [0, 1, 2, 3];
-    const greetingArmRotations = [
-      0, 0, 0,  // Start
-      0, 0, 1.5,  // Raise arm
-      0, 0, 1.5,  // Hold
-      0, 0, 0   // Lower
-    ];
+    const greetingTracks: THREE.KeyframeTrack[] = [];
     
-    enhancedAnimations['Standing Greeting'] = new THREE.AnimationClip('Standing Greeting', 3, [
-      new THREE.QuaternionKeyframeTrack('.bones[rightUpperArm].quaternion', greetingTimes, greetingArmRotations)
-    ]);
+    // Root rotation for greeting
+    const greetingRotations: number[] = [];
+    greetingTimes.forEach((time, index) => {
+      const angle = index === 1 || index === 2 ? 0.3 : 0;
+      const quat = new THREE.Quaternion();
+      quat.setFromEuler(new THREE.Euler(0, angle, 0));
+      greetingRotations.push(quat.x, quat.y, quat.z, quat.w);
+    });
+    greetingTracks.push(new THREE.QuaternionKeyframeTrack('.quaternion', greetingTimes, greetingRotations));
 
-    // Happy animation - bouncing
+    // Add bone-specific greeting only if skeleton exists
+    if (hasSkeletonStructure && vrmModel?.humanoid) {
+      const rightArmBone = vrmModel.humanoid.getBoneNode('rightUpperArm' as any);
+      if (rightArmBone) {
+        const armRotations: number[] = [];
+        greetingTimes.forEach((time, index) => {
+          const angle = index === 1 || index === 2 ? 1.5 : 0;
+          const quat = new THREE.Quaternion();
+          quat.setFromEuler(new THREE.Euler(0, 0, angle));
+          armRotations.push(quat.x, quat.y, quat.z, quat.w);
+        });
+        greetingTracks.push(new THREE.QuaternionKeyframeTrack(`${rightArmBone.name}.quaternion`, greetingTimes, armRotations));
+      }
+    }
+    
+    enhancedAnimations['Standing Greeting'] = new THREE.AnimationClip('Standing Greeting', 3, greetingTracks);
+
+    // Happy animation - bouncing (safe for all models)
     const happyTimes = [0, 0.5, 1];
     const happyPositions = [0, 0, 0, 0, 0.2, 0, 0, 0, 0];
     enhancedAnimations['Happy'] = new THREE.AnimationClip('Happy', 1, [
       new THREE.VectorKeyframeTrack('.position', happyTimes, happyPositions)
     ]);
 
-    // Idle animation
+    // Idle animation - gentle swaying
     const idleTimes = [0, 2, 4];
-    const idleRotations = [0, 0, 0, 0, 0.1, 0, 0, 0, 0];
+    const idleRotations: number[] = [];
+    idleTimes.forEach((time, index) => {
+      const angle = Math.sin(time) * 0.1;
+      const quat = new THREE.Quaternion();
+      quat.setFromEuler(new THREE.Euler(0, angle, 0));
+      idleRotations.push(quat.x, quat.y, quat.z, quat.w);
+    });
     enhancedAnimations['Female Laying Pose'] = new THREE.AnimationClip('Female Laying Pose', 4, [
       new THREE.QuaternionKeyframeTrack('.quaternion', idleTimes, idleRotations)
     ]);
 
-    // Add other emotion animations
+    // Add other emotion animations (reuse safe animations)
     enhancedAnimations['Sad Idle'] = enhancedAnimations['Female Laying Pose'];
     enhancedAnimations['Angry'] = enhancedAnimations['Happy'];
     enhancedAnimations['Laughing'] = enhancedAnimations['Happy'];
@@ -170,6 +208,13 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
           
           setVrm(vrmModel);
           
+          // Check if the model has a proper skeleton structure
+          const hasSkeletonStructure = !!(vrmModel.humanoid && 
+            vrmModel.humanoid.getBoneNode('rightUpperArm' as any) &&
+            vrmModel.humanoid.getBoneNode('leftUpperArm' as any));
+          
+          setHasSkeleton(hasSkeletonStructure);
+          
           if (meshRef.current) {
             meshRef.current.add(vrmModel.scene);
             // Position the model properly - centered and at ground level
@@ -182,11 +227,11 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
           const animMixer = new THREE.AnimationMixer(vrmModel.scene);
           setMixer(animMixer);
           
-          // Load enhanced animations
-          setAnimations(createEnhancedAnimations(vrmModel));
+          // Load enhanced animations with skeleton check
+          setAnimations(createEnhancedAnimations(vrmModel, hasSkeletonStructure));
           setIsInitialized(true);
           
-          console.log('VRM model loaded successfully');
+          console.log('VRM model loaded successfully, has skeleton:', hasSkeletonStructure);
         }
       },
       (progress) => {
@@ -218,11 +263,12 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
     const animMixer = new THREE.AnimationMixer(fallbackMesh);
     setMixer(animMixer);
     
-    // Load enhanced animations for fallback
-    setAnimations(createEnhancedAnimations());
+    // Load enhanced animations for fallback (no skeleton)
+    setAnimations(createEnhancedAnimations(undefined, false));
+    setHasSkeleton(false);
     setIsInitialized(true);
     
-    console.log('Using fallback model with enhanced animations');
+    console.log('Using fallback model with safe animations (no skeleton)');
   };
 
   // Load FBX animations with fallback to enhanced animations
@@ -304,26 +350,36 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
       currentAction.fadeOut(0.5);
     }
 
-    // Start new animation
-    const clip = animations[animationToPlay];
-    const action = mixer.clipAction(clip);
-    action.reset().fadeIn(0.5);
-    
-    // Set loop mode based on animation type
-    if (isMusic && danceAnimations.includes(animationToPlay)) {
-      action.setLoop(THREE.LoopRepeat, Infinity);
-      action.timeScale = 1.2; // Slightly faster for dancing
-    } else if (animationToPlay === 'Standing Greeting') {
-      action.setLoop(THREE.LoopOnce, 1);
-      action.clampWhenFinished = true;
-    } else {
-      action.setLoop(THREE.LoopRepeat, Infinity);
+    try {
+      // Start new animation
+      const clip = animations[animationToPlay];
+      const action = mixer.clipAction(clip);
+      action.reset().fadeIn(0.5);
+      
+      // Set loop mode based on animation type
+      if (isMusic && danceAnimations.includes(animationToPlay)) {
+        action.setLoop(THREE.LoopRepeat, Infinity);
+        action.timeScale = 1.2; // Slightly faster for dancing
+      } else if (animationToPlay === 'Standing Greeting') {
+        action.setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true;
+      } else {
+        action.setLoop(THREE.LoopRepeat, Infinity);
+      }
+      
+      action.play();
+      setCurrentAction(action);
+      console.log('Playing animation:', animationToPlay, 'isMusic:', isMusic, 'hasSkeleton:', hasSkeleton);
+    } catch (error) {
+      console.error('Error playing animation:', animationToPlay, error);
+      // Fallback to a safe animation
+      if (animations['Female Laying Pose']) {
+        const fallbackAction = mixer.clipAction(animations['Female Laying Pose']);
+        fallbackAction.reset().play();
+        setCurrentAction(fallbackAction);
+      }
     }
-    
-    action.play();
-    setCurrentAction(action);
-    console.log('Playing animation:', animationToPlay, 'isMusic:', isMusic);
-  }, [manualAnimation, currentAnimation, animations, mixer, isMusic]);
+  }, [manualAnimation, currentAnimation, animations, mixer, isMusic, hasSkeleton]);
 
   // Auto-switch dance animations when music is playing (only if no manual animation)
   useEffect(() => {
@@ -335,17 +391,21 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
       
       const nextDance = danceAnimations[nextIndex];
       if (animations[nextDance]) {
-        if (currentAction) {
-          currentAction.fadeOut(1);
+        try {
+          if (currentAction) {
+            currentAction.fadeOut(1);
+          }
+          
+          const newAction = mixer.clipAction(animations[nextDance]);
+          newAction.reset().fadeIn(1).play();
+          newAction.setLoop(THREE.LoopRepeat, Infinity);
+          newAction.timeScale = 1.2; // Faster dancing
+          setCurrentAction(newAction);
+          
+          console.log('Switched to dance:', nextDance);
+        } catch (error) {
+          console.error('Error switching dance animation:', error);
         }
-        
-        const newAction = mixer.clipAction(animations[nextDance]);
-        newAction.reset().fadeIn(1).play();
-        newAction.setLoop(THREE.LoopRepeat, Infinity);
-        newAction.timeScale = 1.2; // Faster dancing
-        setCurrentAction(newAction);
-        
-        console.log('Switched to dance:', nextDance);
       }
     };
 
@@ -358,23 +418,31 @@ function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic, manualAnima
   // Start with greeting animation when initialized
   useEffect(() => {
     if (isInitialized && mixer && animations['Standing Greeting'] && !hasGreeted && !manualAnimation) {
-      const greetingClip = animations['Standing Greeting'];
-      const greetingAction = mixer.clipAction(greetingClip);
-      greetingAction.reset().play();
-      greetingAction.setLoop(THREE.LoopOnce, 1);
-      greetingAction.clampWhenFinished = true;
-      setCurrentAction(greetingAction);
-      setHasGreeted(true);
-      
-      // Switch to idle after greeting
-      setTimeout(() => {
-        if (animations['Female Laying Pose'] && !isMusic && !manualAnimation) {
-          const idleAction = mixer.clipAction(animations['Female Laying Pose']);
-          idleAction.reset().fadeIn(1).play();
-          idleAction.setLoop(THREE.LoopRepeat, Infinity);
-          setCurrentAction(idleAction);
-        }
-      }, 3000);
+      try {
+        const greetingClip = animations['Standing Greeting'];
+        const greetingAction = mixer.clipAction(greetingClip);
+        greetingAction.reset().play();
+        greetingAction.setLoop(THREE.LoopOnce, 1);
+        greetingAction.clampWhenFinished = true;
+        setCurrentAction(greetingAction);
+        setHasGreeted(true);
+        
+        // Switch to idle after greeting
+        setTimeout(() => {
+          if (animations['Female Laying Pose'] && !isMusic && !manualAnimation) {
+            try {
+              const idleAction = mixer.clipAction(animations['Female Laying Pose']);
+              idleAction.reset().fadeIn(1).play();
+              idleAction.setLoop(THREE.LoopRepeat, Infinity);
+              setCurrentAction(idleAction);
+            } catch (error) {
+              console.error('Error playing idle animation:', error);
+            }
+          }
+        }, 3000);
+      } catch (error) {
+        console.error('Error playing greeting animation:', error);
+      }
     }
   }, [isInitialized, mixer, animations, hasGreeted, isMusic, manualAnimation]);
 
