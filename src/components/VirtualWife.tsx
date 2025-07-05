@@ -164,15 +164,22 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
       greetingAction.setLoop(THREE.LoopOnce, 1);
       setCurrentAction(greetingAction);
       
-      // After greeting, switch to idle
-      greetingAction.addEventListener('finished', () => {
-        if (animations['Female Laying Pose']) {
+      // Add event listener to mixer for animation finished events
+      const onFinished = (event: any) => {
+        if (event.action === greetingAction && animations['Female Laying Pose']) {
           const idleAction = mixer.clipAction(animations['Female Laying Pose']);
           idleAction.reset().fadeIn(1).play();
           idleAction.setLoop(THREE.LoopRepeat, Infinity);
           setCurrentAction(idleAction);
         }
-      });
+      };
+      
+      mixer.addEventListener('finished', onFinished);
+      
+      // Cleanup function to remove event listener
+      return () => {
+        mixer.removeEventListener('finished', onFinished);
+      };
     }
   }, [isInitialized, mixer, animations, currentAction]);
 
