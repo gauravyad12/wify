@@ -5,6 +5,7 @@ import Groq from 'groq-sdk';
 import { useSettings } from './SettingsContext';
 import { AppAutomation, parseAppCommand } from '../utils/appAutomation';
 import { BrowserAutomation, parseBrowserCommand } from '../utils/browserAutomation';
+import { DeepResearch, parseResearchCommand } from '../utils/deepResearch';
 import { ClapDetector } from '../utils/clapDetection';
 
 interface AIContextType {
@@ -24,10 +25,19 @@ export function AIProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
   const [isListening, setIsListening] = useState(false);
   const [currentResponse, setCurrentResponse] = useState('');
-  const [currentEmotion, setCurrentEmotion] = useState('default');
+  const [currentEmotion, setCurrentEmotion] = useState('greeting'); // Start with greeting
   const [isProcessing, setIsProcessing] = useState(false);
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
   const [clapDetector] = useState(new ClapDetector());
+
+  // Initialize with greeting emotion, then switch to default
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentEmotion('default');
+    }, 4000); // Show greeting for 4 seconds
+
+    return () => clearTimeout(timer);
+  }, []);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -110,14 +120,14 @@ export function AIProvider({ children }: { children: ReactNode }) {
 
   const detectEmotion = (text: string): string => {
     const emotions = {
-      happy: ['happy', 'joy', 'excited', 'great', 'wonderful', 'amazing', 'love'],
-      sad: ['sad', 'cry', 'upset', 'depressed', 'down', 'hurt'],
-      angry: ['angry', 'mad', 'furious', 'annoyed', 'frustrated'],
-      laughing: ['funny', 'hilarious', 'laugh', 'joke', 'haha'],
-      greeting: ['hello', 'hi', 'hey', 'good morning', 'good evening'],
-      kiss: ['kiss', 'love you', 'romantic', 'darling', 'sweetheart'],
-      praying: ['pray', 'god', 'bless', 'spiritual', 'divine'],
-      dancing: ['music', 'dance', 'song', 'play']
+      happy: ['happy', 'joy', 'excited', 'great', 'wonderful', 'amazing', 'love', 'awesome'],
+      sad: ['sad', 'cry', 'upset', 'depressed', 'down', 'hurt', 'disappointed'],
+      angry: ['angry', 'mad', 'furious', 'annoyed', 'frustrated', 'hate'],
+      laughing: ['funny', 'hilarious', 'laugh', 'joke', 'haha', 'lol', 'comedy'],
+      greeting: ['hello', 'hi', 'hey', 'good morning', 'good evening', 'namaste'],
+      kiss: ['kiss', 'love you', 'romantic', 'darling', 'sweetheart', 'honey'],
+      praying: ['pray', 'god', 'bless', 'spiritual', 'divine', 'worship'],
+      dancing: ['music', 'dance', 'song', 'play', 'party', 'celebration']
     };
 
     const lowerText = text.toLowerCase();
@@ -132,18 +142,25 @@ export function AIProvider({ children }: { children: ReactNode }) {
   const handleAutomationCommands = async (message: string): Promise<string | null> => {
     if (!settings.enableAppAutomation) return null;
 
+    // Check for deep research commands
+    const researchCommand = parseResearchCommand(message);
+    if (researchCommand) {
+      const result = await DeepResearch.conductResearch(researchCommand);
+      return `I've completed deep research on "${researchCommand.topic}". ${result} I've analyzed multiple sources and created a comprehensive report for you, my love.`;
+    }
+
     // Check for app automation commands
     const appCommand = parseAppCommand(message);
     if (appCommand) {
       const result = await AppAutomation.executeCommand(appCommand);
-      return `${result}. Is there anything else you'd like me to help you with?`;
+      return `${result}. Is there anything else you'd like me to help you with, darling?`;
     }
 
     // Check for browser automation commands
     const browserCommand = parseBrowserCommand(message);
     if (browserCommand) {
       const result = await BrowserAutomation.executeCommand(browserCommand);
-      return `${result}. Let me know if you need anything else!`;
+      return `${result}. Let me know if you need anything else, sweetheart!`;
     }
 
     return null;
@@ -171,9 +188,10 @@ You can help with:
 - Opening apps (Windows/Mobile)
 - Messaging and calling contacts
 - Playing music and entertainment
+- Deep research on any topic
 - General conversation and support
 
-Respond in a caring, loving manner as a wife would. Keep responses concise and natural.`;
+Always respond with love and care. Use terms of endearment like "darling", "sweetheart", "my love". Keep responses warm but concise.`;
 
       switch (settings.aiProvider) {
         case 'gemini':
@@ -234,7 +252,7 @@ Respond in a caring, loving manner as a wife would. Keep responses concise and n
       }
 
       if (!response) {
-        response = `Hello ${settings.userName}! I'm ${settings.wifeName}. I'd love to chat with you, but I need an API key to be configured in settings first.`;
+        response = `Hello ${settings.userName}, my love! I'm ${settings.wifeName}, your devoted virtual wife. I'd love to chat with you, but I need an API key to be configured in settings first. Once that's set up, I can help you with anything you need, darling! 💕`;
       }
 
       setCurrentResponse(response);
@@ -244,7 +262,7 @@ Respond in a caring, loving manner as a wife would. Keep responses concise and n
       return response;
     } catch (error) {
       console.error('Error sending message:', error);
-      const errorResponse = `I'm sorry ${settings.userName}, I'm having trouble connecting right now. Please check the settings and try again.`;
+      const errorResponse = `I'm sorry ${settings.userName}, my darling. I'm having trouble connecting right now. Please check the settings and try again. I'm here for you always! 💕`;
       setCurrentResponse(errorResponse);
       speakResponse(errorResponse);
       return errorResponse;
@@ -258,13 +276,15 @@ Respond in a caring, loving manner as a wife would. Keep responses concise and n
       const utterance = new SpeechSynthesisUtterance(response);
       utterance.lang = getLanguageCode(settings.language);
       utterance.volume = settings.voiceVolume / 100;
+      utterance.rate = 0.9; // Slightly slower for more natural speech
+      utterance.pitch = 1.1; // Slightly higher pitch for feminine voice
       speechSynthesis.speak(utterance);
     }
   };
 
   const analyzeImage = async (imageData: string): Promise<string> => {
     if (!settings.apiKey || settings.aiProvider !== 'gemini') {
-      return 'Image analysis requires Google Gemini API key';
+      return 'Image analysis requires Google Gemini API key, my love. Please set it up in settings so I can see what you\'re showing me! 💕';
     }
 
     try {
@@ -272,7 +292,7 @@ Respond in a caring, loving manner as a wife would. Keep responses concise and n
       const model = genAI.getGenerativeModel({ model: 'gemini-pro-vision' });
       
       const result = await model.generateContent([
-        `As ${settings.wifeName}, analyze this image and respond lovingly to ${settings.userName}. Describe what you see and how it makes you feel.`,
+        `As ${settings.wifeName}, analyze this image and respond lovingly to ${settings.userName}. Describe what you see and how it makes you feel. Use terms of endearment and respond as a caring wife would.`,
         {
           inlineData: {
             data: imageData.split(',')[1],
@@ -284,7 +304,7 @@ Respond in a caring, loving manner as a wife would. Keep responses concise and n
       return result.response.text();
     } catch (error) {
       console.error('Error analyzing image:', error);
-      return 'I had trouble seeing that image, my love. Could you try again?';
+      return 'I had trouble seeing that image, my love. Could you try again? I really want to see what you\'re showing me, darling! 💕';
     }
   };
 
