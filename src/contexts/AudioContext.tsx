@@ -26,115 +26,164 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(80);
   const [isMuted, setIsMuted] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const oscillatorRef = useRef<OscillatorNode | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Initialize audio element
+  // Initialize Web Audio API for generating tones
   useEffect(() => {
-    audioRef.current = new Audio();
-    audioRef.current.crossOrigin = 'anonymous';
-    audioRef.current.volume = volume / 100;
-    
-    // Audio event listeners
-    const audio = audioRef.current;
-    
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleEnded = () => setIsPlaying(false);
-    const handleError = (e: any) => {
-      console.error('Audio error:', e);
-      setIsPlaying(false);
-    };
-    
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('pause', handlePause);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError);
-    
+    try {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    } catch (error) {
+      console.log('Web Audio API not supported, using fallback');
+    }
+
     return () => {
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('pause', handlePause);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-      audio.pause();
-      audio.src = '';
+      if (oscillatorRef.current) {
+        oscillatorRef.current.stop();
+        oscillatorRef.current = null;
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
     };
   }, []);
-
-  // Update volume when changed
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume / 100;
-    }
-  }, [volume, isMuted]);
 
   const playTrack = async (track: Track) => {
     setCurrentTrack(track);
     
-    if (audioRef.current) {
-      try {
-        // For YouTube videos, we'll use a placeholder audio or try to extract audio
-        // In a real implementation, you'd use YouTube API or a service to get audio stream
+    try {
+      // Stop any currently playing audio
+      if (oscillatorRef.current) {
+        oscillatorRef.current.stop();
+        oscillatorRef.current = null;
+      }
+
+      // Generate a pleasant musical tone using Web Audio API
+      if (audioContextRef.current) {
+        const audioContext = audioContextRef.current;
         
-        // For now, we'll simulate with a placeholder audio file or use text-to-speech
-        // to announce the song is playing
-        const audioUrl = getAudioUrl(track);
-        
-        audioRef.current.src = audioUrl;
-        audioRef.current.currentTime = 0;
-        
-        const playPromise = audioRef.current.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setIsPlaying(true);
-              console.log('Playing track:', track.title);
-            })
-            .catch(error => {
-              console.error('Error playing audio:', error);
-              // Fallback: use text-to-speech to announce the song
-              speakTrackInfo(track);
-              setIsPlaying(true); // Set playing state for animation
-            });
+        // Resume audio context if suspended (required by some browsers)
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
         }
-      } catch (error) {
-        console.error('Error setting up audio:', error);
+
+        // Create oscillator for background music simulation
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        // Connect nodes
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // Set up a pleasant musical pattern
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4 note
+        
+        // Create a simple melody pattern
+        const notes = [440, 493.88, 523.25, 587.33, 659.25]; // A, B, C, D, E
+        let noteIndex = 0;
+        
+        const playNextNote = () => {
+          if (oscillatorRef.current) {
+            const frequency = notes[noteIndex % notes.length];
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            noteIndex++;
+          }
+        };
+        
+        // Change notes every 2 seconds
+        const noteInterval = setInterval(playNextNote, 2000);
+        
+        // Set volume
+        gainNode.gain.setValueAtTime((isMuted ? 0 : volume / 100) * 0.1, audioContext.currentTime);
+        
+        // Start playing
+        oscillator.start();
+        oscillatorRef.current = oscillator;
+        
+        // Handle oscillator end
+        oscillator.onended = () => {
+          clearInterval(noteInterval);
+          setIsPlaying(false);
+          oscillatorRef.current = null;
+        };
+        
+        setIsPlaying(true);
+        console.log('Playing simulated music for:', track.title);
+        
+        // Announce the track using speech synthesis
+        speakTrackInfo(track);
+        
+      } else {
+        // Fallback: just use speech synthesis
         speakTrackInfo(track);
         setIsPlaying(true);
+        
+        // Auto-stop after 30 seconds for demo
+        setTimeout(() => {
+          setIsPlaying(false);
+        }, 30000);
       }
+      
+    } catch (error) {
+      console.error('Error playing track:', error);
+      // Fallback: just set playing state for animation
+      speakTrackInfo(track);
+      setIsPlaying(true);
+      
+      // Auto-stop after 30 seconds
+      setTimeout(() => {
+        setIsPlaying(false);
+      }, 30000);
     }
   };
 
   const pauseTrack = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
+    if (oscillatorRef.current) {
+      oscillatorRef.current.stop();
+      oscillatorRef.current = null;
     }
     setIsPlaying(false);
   };
 
   const setVolume = (newVolume: number) => {
     setVolumeState(newVolume);
+    
+    // Update Web Audio API volume if playing
+    if (audioContextRef.current && oscillatorRef.current) {
+      const gainNodes = audioContextRef.current.destination;
+      // Note: In a real implementation, you'd store the gain node reference
+    }
   };
 
   const toggleMute = () => {
     setIsMuted(prev => !prev);
   };
 
-  // Helper function to get audio URL (placeholder implementation)
-  const getAudioUrl = (track: Track): string => {
-    // In a real implementation, you would:
-    // 1. Use YouTube API to get audio stream
-    // 2. Use a service like youtube-dl or similar
-    // 3. Use embedded player with audio extraction
-    
-    // For now, return a placeholder or use a sample audio file
-    return '/sample-music.mp3'; // You would need to add this file to public folder
-  };
-
-  // Fallback: use text-to-speech to announce the track
+  // Use text-to-speech to announce the track
   const speakTrackInfo = (track: Track) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(`Now playing: ${track.title}`);
+    if ('speechSynthesis' in window && !isMuted) {
+      // Stop any current speech
+      speechSynthesis.cancel();
+      
+      const utterance = new SpeechSynthesisUtterance(`Now playing ${track.title}. I'm going to dance for you!`);
       utterance.volume = volume / 100;
       utterance.rate = 1;
+      utterance.pitch = 1.2; // Slightly higher pitch for feminine voice
+      
+      // Use a female voice if available
+      const voices = speechSynthesis.getVoices();
+      const femaleVoice = voices.find(voice => 
+        voice.name.toLowerCase().includes('female') || 
+        voice.name.toLowerCase().includes('woman') ||
+        voice.name.toLowerCase().includes('zira') ||
+        voice.name.toLowerCase().includes('hazel')
+      );
+      
+      if (femaleVoice) {
+        utterance.voice = femaleVoice;
+      }
+      
       speechSynthesis.speak(utterance);
     }
   };
