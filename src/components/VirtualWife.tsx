@@ -114,7 +114,7 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
       setCurrentAction(greetingAction);
       
       // After greeting, switch to idle
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         if (animations['Female Laying Pose']) {
           greetingAction.fadeOut(1);
           const idleAction = mixer.clipAction(animations['Female Laying Pose']);
@@ -122,6 +122,11 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
           setCurrentAction(idleAction);
         }
       }, 3000);
+
+      // Cleanup function to clear timeout
+      return () => {
+        clearTimeout(timeoutId);
+      };
     }
   }, [isInitialized, mixer, animations, currentAction]);
 
