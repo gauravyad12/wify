@@ -27,6 +27,12 @@ interface Settings {
   // Music
   youtubeApiKey: string;
   autoDance: boolean;
+  musicMode: 'audio' | 'video';
+  
+  // App Automation
+  enableAppAutomation: boolean;
+  defaultMessagingApp: string;
+  defaultCallingApp: string;
 }
 
 interface SettingsContextType {
@@ -49,7 +55,11 @@ const defaultSettings: Settings = {
   cameraEnabled: false,
   realtimeAnalysis: false,
   youtubeApiKey: '',
-  autoDance: true
+  autoDance: true,
+  musicMode: 'audio',
+  enableAppAutomation: true,
+  defaultMessagingApp: 'whatsapp',
+  defaultCallingApp: 'phone'
 };
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);

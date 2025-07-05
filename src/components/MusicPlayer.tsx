@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Pause, SkipForward, SkipBack, Volume2, Search } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Volume2, Search, Music, Video } from 'lucide-react';
 import { useAudio } from '../contexts/AudioContext';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -13,10 +13,12 @@ interface YouTubeVideo {
 
 export default function MusicPlayer() {
   const { isPlaying, currentTrack, playTrack, pauseTrack, setVolume, volume } = useAudio();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<YouTubeVideo[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [audioMode, setAudioMode] = useState<'audio' | 'video'>('audio');
 
   const searchYouTube = async (query: string) => {
     if (!settings.youtubeApiKey || !query.trim()) return;
@@ -58,11 +60,48 @@ export default function MusicPlayer() {
     });
   };
 
+  // Background audio player for audio-only mode
+  useEffect(() => {
+    if (currentTrack && audioMode === 'audio') {
+      // In a real implementation, you would use YouTube Audio API or extract audio stream
+      // For now, we'll simulate background audio playback
+      console.log('Playing audio-only:', currentTrack.title);
+    }
+  }, [currentTrack, audioMode]);
+
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
+      {/* Header with Mode Toggle */}
       <div className="bg-black/20 backdrop-blur-md p-4">
-        <h2 className="text-white font-semibold text-lg mb-4">Music Player</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-white font-semibold text-lg">Music Player</h2>
+          
+          {/* Audio/Video Mode Toggle */}
+          <div className="flex bg-white/10 rounded-lg p-1">
+            <button
+              onClick={() => setAudioMode('audio')}
+              className={`flex items-center space-x-2 px-3 py-1 rounded transition-colors ${
+                audioMode === 'audio' 
+                  ? 'bg-purple-600 text-white' 
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <Music size={16} />
+              <span className="text-sm">Audio</span>
+            </button>
+            <button
+              onClick={() => setAudioMode('video')}
+              className={`flex items-center space-x-2 px-3 py-1 rounded transition-colors ${
+                audioMode === 'video' 
+                  ? 'bg-purple-600 text-white' 
+                  : 'text-white/70 hover:text-white'
+              }`}
+            >
+              <Video size={16} />
+              <span className="text-sm">Video</span>
+            </button>
+          </div>
+        </div>
         
         {/* Search */}
         <form onSubmit={handleSearch} className="flex space-x-2">
@@ -87,6 +126,12 @@ export default function MusicPlayer() {
             Please add your YouTube API key in settings to enable music search
           </p>
         )}
+
+        {audioMode === 'audio' && (
+          <p className="text-green-400 text-sm mt-2">
+            🎵 Audio-only mode: Music plays in background without video
+          </p>
+        )}
       </div>
 
       {/* Current Track */}
@@ -100,7 +145,9 @@ export default function MusicPlayer() {
             />
             <div className="flex-1">
               <h3 className="text-white font-semibold">{currentTrack.title}</h3>
-              <p className="text-white/60 text-sm">Now Playing</p>
+              <p className="text-white/60 text-sm">
+                Now Playing {audioMode === 'audio' ? '(Audio Only)' : '(Video)'}
+              </p>
             </div>
           </div>
 
@@ -133,6 +180,31 @@ export default function MusicPlayer() {
             />
             <span className="text-white/70 text-sm w-8">{volume}%</span>
           </div>
+
+          {/* Background Audio Player */}
+          {audioMode === 'audio' && (
+            <audio
+              ref={audioRef}
+              className="hidden"
+              controls={false}
+              autoPlay={isPlaying}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Video Player for Video Mode */}
+      {currentTrack && audioMode === 'video' && (
+        <div className="bg-black aspect-video">
+          <iframe
+            width="100%"
+            height="100%"
+            src={`https://www.youtube.com/embed/${currentTrack.id}?autoplay=${isPlaying ? 1 : 0}&controls=1`}
+            title={currentTrack.title}
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+          />
         </div>
       )}
 
@@ -175,6 +247,10 @@ export default function MusicPlayer() {
             <Search size={48} className="mx-auto mb-4" />
             <p>Search for music to get started</p>
             <p className="text-sm">Try searching for "hindi songs" or "relaxing music"</p>
+            <div className="mt-4 text-xs text-white/40">
+              <p>🎵 Audio mode: Background music without video</p>
+              <p>📺 Video mode: Full YouTube video player</p>
+            </div>
           </div>
         )}
       </div>

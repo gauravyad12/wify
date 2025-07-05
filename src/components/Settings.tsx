@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Save, User, Brain, Globe, Mic, Camera, Music } from 'lucide-react';
+import { Save, User, Brain, Globe, Mic, Camera, Music, Smartphone, Monitor } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 
 export default function Settings() {
   const { settings, updateSettings } = useSettings();
-  const [activeSection, setActiveSection] = useState<'profile' | 'ai' | 'language' | 'audio' | 'camera' | 'music'>('profile');
+  const [activeSection, setActiveSection] = useState<'profile' | 'ai' | 'language' | 'audio' | 'camera' | 'music' | 'automation'>('profile');
 
   const handleSave = () => {
     // Settings are automatically saved via context
@@ -18,7 +18,8 @@ export default function Settings() {
     { id: 'language', icon: Globe, label: 'Language' },
     { id: 'audio', icon: Mic, label: 'Audio' },
     { id: 'camera', icon: Camera, label: 'Camera' },
-    { id: 'music', icon: Music, label: 'Music' }
+    { id: 'music', icon: Music, label: 'Music' },
+    { id: 'automation', icon: Smartphone, label: 'Automation' }
   ];
 
   return (
@@ -264,6 +265,18 @@ export default function Settings() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-white/80 text-sm font-medium mb-2">Default Music Mode</label>
+                  <select
+                    value={settings.musicMode}
+                    onChange={(e) => updateSettings({ musicMode: e.target.value as 'audio' | 'video' })}
+                    className="w-full bg-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="audio">Audio Only (Background Music)</option>
+                    <option value="video">Video Mode (Full YouTube Player)</option>
+                  </select>
+                </div>
+
                 <div className="flex items-center space-x-3">
                   <input
                     type="checkbox"
@@ -275,6 +288,69 @@ export default function Settings() {
                   <label htmlFor="autoDance" className="text-white/80 text-sm">
                     Auto-dance when music is playing
                   </label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'automation' && (
+            <div className="space-y-6">
+              <h3 className="text-white text-xl font-semibold">App Automation Settings</h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="enableAppAutomation"
+                    checked={settings.enableAppAutomation}
+                    onChange={(e) => updateSettings({ enableAppAutomation: e.target.checked })}
+                    className="w-4 h-4 text-purple-600 bg-white/10 border-white/30 rounded focus:ring-purple-500"
+                  />
+                  <label htmlFor="enableAppAutomation" className="text-white/80 text-sm">
+                    Enable app automation (Windows/Mobile)
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-white/80 text-sm font-medium mb-2">Default Messaging App</label>
+                  <select
+                    value={settings.defaultMessagingApp}
+                    onChange={(e) => updateSettings({ defaultMessagingApp: e.target.value })}
+                    className="w-full bg-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="instagram">Instagram</option>
+                    <option value="telegram">Telegram</option>
+                    <option value="sms">SMS/Messages</option>
+                    <option value="facebook">Facebook Messenger</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-white/80 text-sm font-medium mb-2">Default Calling App</label>
+                  <select
+                    value={settings.defaultCallingApp}
+                    onChange={(e) => updateSettings({ defaultCallingApp: e.target.value })}
+                    className="w-full bg-white/10 text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    <option value="phone">Phone</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="facetime">FaceTime</option>
+                    <option value="skype">Skype</option>
+                    <option value="teams">Microsoft Teams</option>
+                  </select>
+                </div>
+
+                <div className="bg-blue-600/20 p-4 rounded-lg">
+                  <h4 className="text-white font-medium mb-2">Supported Commands:</h4>
+                  <div className="text-white/80 text-sm space-y-1">
+                    <p>• "Open camera" - Opens camera app</p>
+                    <p>• "Message John" - Opens messaging app</p>
+                    <p>• "Call mom" - Initiates phone call</p>
+                    <p>• "WhatsApp video call Sarah" - Video call</p>
+                    <p>• "Open Instagram" - Opens social apps</p>
+                    <p>• "Open Chrome and search cats" - Browser automation</p>
+                  </div>
                 </div>
               </div>
             </div>

@@ -3,6 +3,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import OpenAI from 'openai';
 import Groq from 'groq-sdk';
 import { useSettings } from './SettingsContext';
+import { AppAutomation, parseAppCommand } from '../utils/appAutomation';
+import { BrowserAutomation, parseBrowserCommand } from '../utils/browserAutomation';
 
 interface AIContextType {
   sendMessage: (message: string) => Promise<string>;
@@ -129,7 +131,8 @@ export function AIProvider({ children }: { children: ReactNode }) {
       laughing: ['funny', 'hilarious', 'laugh', 'joke', 'haha'],
       greeting: ['hello', 'hi', 'hey', 'good morning', 'good evening'],
       kiss: ['kiss', 'love you', 'romantic', 'darling', 'sweetheart'],
-      praying: ['pray', 'god', 'bless', 'spiritual', 'divine']
+      praying: ['pray', 'god', 'bless', 'spiritual', 'divine'],
+      dancing: ['music', 'dance', 'song', 'play']
     };
 
     const lowerText = text.toLowerCase();
@@ -141,13 +144,49 @@ export function AIProvider({ children }: { children: ReactNode }) {
     return 'default';
   };
 
+  const handleAutomationCommands = async (message: string): Promise<string | null> => {
+    // Check for app automation commands
+    const appCommand = parseAppCommand(message);
+    if (appCommand) {
+      const result = await AppAutomation.executeCommand(appCommand);
+      return `${result}. Is there anything else you'd like me to help you with?`;
+    }
+
+    // Check for browser automation commands
+    const browserCommand = parseBrowserCommand(message);
+    if (browserCommand) {
+      const result = await BrowserAutomation.executeCommand(browserCommand);
+      return `${result}. Let me know if you need anything else!`;
+    }
+
+    return null;
+  };
+
   const sendMessage = async (message: string): Promise<string> => {
     setIsProcessing(true);
     setCurrentEmotion(detectEmotion(message));
 
     try {
+      // Check for automation commands first
+      const automationResponse = await handleAutomationCommands(message);
+      if (automationResponse) {
+        setCurrentResponse(automationResponse);
+        speakResponse(automationResponse);
+        saveTrainingData(message, automationResponse);
+        return automationResponse;
+      }
+
+      // Regular AI conversation
       let response = '';
-      const context = `You are ${settings.wifeName}, a loving virtual wife. Your personality: ${settings.personality}. User context: ${settings.relationshipContext}. User's name: ${settings.userName}. Respond in a caring, loving manner as a wife would.`;
+      const context = `You are ${settings.wifeName}, a loving virtual wife. Your personality: ${settings.personality}. User context: ${settings.relationshipContext}. User's name: ${settings.userName}. 
+
+You can help with:
+- Opening apps (Windows/Mobile)
+- Messaging and calling contacts
+- Playing music and entertainment
+- General conversation and support
+
+Respond in a caring, loving manner as a wife would. Keep responses concise and natural.`;
 
       switch (settings.aiProvider) {
         case 'gemini':
@@ -212,16 +251,7 @@ export function AIProvider({ children }: { children: ReactNode }) {
       }
 
       setCurrentResponse(response);
-      
-      // Text-to-speech
-      if ('speechSynthesis' in window && !settings.isMuted) {
-        const utterance = new SpeechSynthesisUtterance(response);
-        utterance.lang = getLanguageCode(settings.language);
-        utterance.volume = settings.voiceVolume / 100;
-        speechSynthesis.speak(utterance);
-      }
-
-      // Save training data
+      speakResponse(response);
       saveTrainingData(message, response);
 
       return response;
@@ -229,9 +259,19 @@ export function AIProvider({ children }: { children: ReactNode }) {
       console.error('Error sending message:', error);
       const errorResponse = `I'm sorry ${settings.userName}, I'm having trouble connecting right now. Please check the settings and try again.`;
       setCurrentResponse(errorResponse);
+      speakResponse(errorResponse);
       return errorResponse;
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const speakResponse = (response: string) => {
+    if ('speechSynthesis' in window && !settings.isMuted) {
+      const utterance = new SpeechSynthesisUtterance(response);
+      utterance.lang = getLanguageCode(settings.language);
+      utterance.volume = settings.voiceVolume / 100;
+      speechSynthesis.speak(utterance);
     }
   };
 
