@@ -13,15 +13,20 @@ interface VRMModelProps {
   modelPath: string;
   currentAnimation: string;
   isPlaying: boolean;
+  isMusic: boolean;
 }
 
-function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
+function VRMModel({ modelPath, currentAnimation, isPlaying, isMusic }: VRMModelProps) {
   const meshRef = useRef<THREE.Group>();
   const [vrm, setVrm] = useState<VRM | null>(null);
   const [animations, setAnimations] = useState<{ [key: string]: THREE.AnimationClip }>({});
   const [mixer, setMixer] = useState<THREE.AnimationMixer | null>(null);
   const [currentAction, setCurrentAction] = useState<THREE.AnimationAction | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [danceIndex, setDanceIndex] = useState(0);
+
+  // Dance animations for music
+  const danceAnimations = ['Hip Hop Dancing', 'Rumba Dancing'];
 
   // Load VRM model
   useEffect(() => {
@@ -40,9 +45,10 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
           
           if (meshRef.current) {
             meshRef.current.add(vrmModel.scene);
-            // Position the model properly
+            // Position the model properly - centered and at ground level
             vrmModel.scene.position.set(0, -1, 0);
             vrmModel.scene.rotation.set(0, 0, 0);
+            vrmModel.scene.scale.set(1, 1, 1);
           }
           
           // Create animation mixer
@@ -58,7 +64,6 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
       },
       (error) => {
         console.error('Error loading VRM:', error);
-        // Try to load a fallback or create a simple placeholder
         createFallbackModel();
       }
     );
@@ -67,7 +72,7 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
   const createFallbackModel = () => {
     // Create a simple fallback model if VRM fails to load
     const geometry = new THREE.CapsuleGeometry(0.5, 1.5, 4, 8);
-    const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const material = new THREE.MeshStandardMaterial({ color: 0xff69b4 });
     const fallbackMesh = new THREE.Mesh(geometry, material);
     fallbackMesh.position.set(0, 0, 0);
     
@@ -145,15 +150,52 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
     const clip = animations[currentAnimation];
     const action = mixer.clipAction(clip);
     action.reset().fadeIn(0.5);
-    action.setLoop(THREE.LoopRepeat, Infinity);
+    
+    // Set loop mode based on animation type
+    if (isMusic && danceAnimations.includes(currentAnimation)) {
+      action.setLoop(THREE.LoopRepeat, Infinity);
+    } else if (currentAnimation === 'Standing Greeting') {
+      action.setLoop(THREE.LoopOnce, 1);
+    } else {
+      action.setLoop(THREE.LoopRepeat, Infinity);
+    }
     
     if (isPlaying) {
       action.play();
     }
     
     setCurrentAction(action);
-    console.log('Playing animation:', currentAnimation);
-  }, [currentAnimation, animations, mixer, isPlaying]);
+    console.log('Playing animation:', currentAnimation, 'isMusic:', isMusic);
+  }, [currentAnimation, animations, mixer, isPlaying, isMusic]);
+
+  // Auto-switch dance animations when music is playing
+  useEffect(() => {
+    if (!isMusic || !mixer || danceAnimations.length === 0) return;
+
+    const switchDance = () => {
+      const nextIndex = (danceIndex + 1) % danceAnimations.length;
+      setDanceIndex(nextIndex);
+      
+      const nextDance = danceAnimations[nextIndex];
+      if (animations[nextDance]) {
+        if (currentAction) {
+          currentAction.fadeOut(1);
+        }
+        
+        const newAction = mixer.clipAction(animations[nextDance]);
+        newAction.reset().fadeIn(1).play();
+        newAction.setLoop(THREE.LoopRepeat, Infinity);
+        setCurrentAction(newAction);
+        
+        console.log('Switched to dance:', nextDance);
+      }
+    };
+
+    // Switch dance every 30 seconds when music is playing
+    const interval = setInterval(switchDance, 30000);
+    
+    return () => clearInterval(interval);
+  }, [isMusic, mixer, animations, danceIndex, currentAction]);
 
   // Start with greeting animation when initialized
   useEffect(() => {
@@ -200,16 +242,21 @@ function VRMModel({ modelPath, currentAnimation, isPlaying }: VRMModelProps) {
 export default function VirtualWife() {
   const { currentEmotion, isListening } = useAI();
   const { settings } = useSettings();
-  const { isPlaying } = useAudio();
+  const { isPlaying, currentTrack } = useAudio();
   
-  const getAnimationForEmotion = (emotion: string) => {
+  const getAnimationForEmotion = (emotion: string, musicPlaying: boolean) => {
+    // If music is playing, prioritize dance animations
+    if (musicPlaying && settings.autoDance) {
+      return 'Hip Hop Dancing'; // Will auto-switch between dance animations
+    }
+    
     const emotionMap: { [key: string]: string } = {
       happy: 'Happy',
       sad: 'Sad Idle',
       angry: 'Angry',
       laughing: 'Laughing',
       greeting: 'Standing Greeting',
-      dancing: isPlaying ? 'Hip Hop Dancing' : 'Rumba Dancing',
+      dancing: 'Hip Hop Dancing',
       praying: 'Praying',
       kiss: 'Kiss',
       default: 'Female Laying Pose' // Idle animation
@@ -231,8 +278,9 @@ export default function VirtualWife() {
         
         <VRMModel
           modelPath="/wife.vrm"
-          currentAnimation={getAnimationForEmotion(currentEmotion)}
+          currentAnimation={getAnimationForEmotion(currentEmotion, isPlaying)}
           isPlaying={true}
+          isMusic={isPlaying}
         />
         
         <Environment preset="sunset" />
@@ -258,11 +306,11 @@ export default function VirtualWife() {
             </div>
           </div>
         )}
-        {isPlaying && (
+        {isPlaying && currentTrack && (
           <div className="bg-green-500/90 text-white px-4 py-2 rounded-full text-sm backdrop-blur-md">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-white rounded-full animate-bounce"></div>
-              <span>Dancing to music</span>
+              <span>Dancing to: {currentTrack.title.substring(0, 30)}...</span>
             </div>
           </div>
         )}
@@ -273,13 +321,16 @@ export default function VirtualWife() {
         <div className="bg-black/50 backdrop-blur-md text-white px-4 py-2 rounded-lg">
           <h3 className="font-semibold text-lg">{settings.wifeName}</h3>
           <p className="text-sm text-white/70">Your Virtual Wife</p>
+          {isPlaying && (
+            <p className="text-xs text-green-400 mt-1">🎵 Dancing to music</p>
+          )}
         </div>
       </div>
 
       {/* Emotion indicator */}
       <div className="absolute top-4 right-4">
         <div className="bg-purple-600/80 backdrop-blur-md text-white px-3 py-1 rounded-full text-sm">
-          {currentEmotion === 'default' ? 'Relaxed' : currentEmotion.charAt(0).toUpperCase() + currentEmotion.slice(1)}
+          {isPlaying ? 'Dancing' : currentEmotion === 'default' ? 'Relaxed' : currentEmotion.charAt(0).toUpperCase() + currentEmotion.slice(1)}
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Play, Pause, SkipForward, SkipBack, Volume2, Search, Music, Video } from 'lucide-react';
+import { Play, Pause, SkipForward, SkipBack, Volume2, Search, Music, Video, Speaker } from 'lucide-react';
 import { useAudio } from '../contexts/AudioContext';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -21,7 +21,31 @@ export default function MusicPlayer() {
   const [audioMode, setAudioMode] = useState<'audio' | 'video'>('audio');
 
   const searchYouTube = async (query: string) => {
-    if (!settings.youtubeApiKey || !query.trim()) return;
+    if (!settings.youtubeApiKey || !query.trim()) {
+      // Provide sample results if no API key
+      const sampleResults: YouTubeVideo[] = [
+        {
+          id: 'sample1',
+          title: `${query} - Sample Song 1`,
+          thumbnail: 'https://images.pexels.com/photos/1763075/pexels-photo-1763075.jpeg?auto=compress&cs=tinysrgb&w=300',
+          duration: '3:45'
+        },
+        {
+          id: 'sample2',
+          title: `${query} - Sample Song 2`,
+          thumbnail: 'https://images.pexels.com/photos/1190298/pexels-photo-1190298.jpeg?auto=compress&cs=tinysrgb&w=300',
+          duration: '4:12'
+        },
+        {
+          id: 'sample3',
+          title: `${query} - Sample Song 3`,
+          thumbnail: 'https://images.pexels.com/photos/1105666/pexels-photo-1105666.jpeg?auto=compress&cs=tinysrgb&w=300',
+          duration: '3:28'
+        }
+      ];
+      setSearchResults(sampleResults);
+      return;
+    }
 
     setIsSearching(true);
     try {
@@ -60,14 +84,12 @@ export default function MusicPlayer() {
     });
   };
 
-  // Background audio player for audio-only mode
+  // Auto-search for popular music on component mount
   useEffect(() => {
-    if (currentTrack && audioMode === 'audio') {
-      // In a real implementation, you would use YouTube Audio API or extract audio stream
-      // For now, we'll simulate background audio playback
-      console.log('Playing audio-only:', currentTrack.title);
+    if (searchResults.length === 0) {
+      searchYouTube('popular music 2024');
     }
-  }, [currentTrack, audioMode]);
+  }, []);
 
   return (
     <div className="h-full flex flex-col">
@@ -86,7 +108,7 @@ export default function MusicPlayer() {
                   : 'text-white/70 hover:text-white'
               }`}
             >
-              <Music size={16} />
+              <Speaker size={16} />
               <span className="text-sm">Audio</span>
             </button>
             <button
@@ -114,7 +136,7 @@ export default function MusicPlayer() {
           />
           <button
             type="submit"
-            disabled={isSearching || !settings.youtubeApiKey}
+            disabled={isSearching}
             className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
           >
             <Search size={20} />
@@ -123,13 +145,13 @@ export default function MusicPlayer() {
 
         {!settings.youtubeApiKey && (
           <p className="text-yellow-400 text-sm mt-2">
-            Please add your YouTube API key in settings to enable music search
+            🎵 Using sample music. Add YouTube API key in settings for real music search
           </p>
         )}
 
         {audioMode === 'audio' && (
           <p className="text-green-400 text-sm mt-2">
-            🎵 Audio-only mode: Music plays in background without video
+            🎵 Audio-only mode: Music plays through speakers, wife will dance!
           </p>
         )}
       </div>
@@ -146,7 +168,8 @@ export default function MusicPlayer() {
             <div className="flex-1">
               <h3 className="text-white font-semibold">{currentTrack.title}</h3>
               <p className="text-white/60 text-sm">
-                Now Playing {audioMode === 'audio' ? '(Audio Only)' : '(Video)'}
+                Now Playing {audioMode === 'audio' ? '(Audio Only)' : '(Video)'} 
+                {isPlaying && ' 🎵'}
               </p>
             </div>
           </div>
@@ -181,14 +204,13 @@ export default function MusicPlayer() {
             <span className="text-white/70 text-sm w-8">{volume}%</span>
           </div>
 
-          {/* Background Audio Player */}
-          {audioMode === 'audio' && (
-            <audio
-              ref={audioRef}
-              className="hidden"
-              controls={false}
-              autoPlay={isPlaying}
-            />
+          {/* Dancing Status */}
+          {isPlaying && (
+            <div className="mt-3 text-center">
+              <div className="bg-green-500/20 text-green-300 px-4 py-2 rounded-lg">
+                <span className="text-sm">💃 {settings.wifeName} is dancing to the music!</span>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -220,7 +242,9 @@ export default function MusicPlayer() {
           </div>
         ) : searchResults.length > 0 ? (
           <div className="space-y-2">
-            <h3 className="text-white font-semibold mb-4">Search Results</h3>
+            <h3 className="text-white font-semibold mb-4">
+              {settings.youtubeApiKey ? 'Search Results' : 'Sample Music (Add API key for real search)'}
+            </h3>
             {searchResults.map((video) => (
               <motion.div
                 key={video.id}
@@ -238,7 +262,12 @@ export default function MusicPlayer() {
                   <h4 className="text-white font-medium text-sm">{video.title}</h4>
                   <p className="text-white/60 text-xs">{video.duration}</p>
                 </div>
-                <Play size={16} className="text-white/70" />
+                <div className="flex items-center space-x-2">
+                  {currentTrack?.id === video.id && isPlaying && (
+                    <div className="text-green-400 text-xs">🎵 Playing</div>
+                  )}
+                  <Play size={16} className="text-white/70" />
+                </div>
               </motion.div>
             ))}
           </div>
@@ -246,10 +275,11 @@ export default function MusicPlayer() {
           <div className="text-center text-white/50 mt-8">
             <Search size={48} className="mx-auto mb-4" />
             <p>Search for music to get started</p>
-            <p className="text-sm">Try searching for "hindi songs" or "relaxing music"</p>
+            <p className="text-sm">Try searching for "hindi songs", "relaxing music", or "dance music"</p>
             <div className="mt-4 text-xs text-white/40">
-              <p>🎵 Audio mode: Background music without video</p>
+              <p>🎵 Audio mode: Background music with dancing</p>
               <p>📺 Video mode: Full YouTube video player</p>
+              <p>💃 Your wife will dance when music plays!</p>
             </div>
           </div>
         )}
